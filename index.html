@@ -207,18 +207,22 @@ function drawMaze() {
 function drawPlayer() {
     const x = player.x * TILE_SIZE;
     const y = player.y * TILE_SIZE;
-    const size = TILE_SIZE + 4;
+    const size = TILE_SIZE + 14;
+    const centerX = x + TILE_SIZE/2;
+    const centerY = y + TILE_SIZE/2;
+    const radius = size/2;
     
     ctx.save();
     ctx.beginPath();
-    ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, size/2 - 2, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
     ctx.clip();
     
     if (playerImg.complete && playerImg.naturalWidth > 0) {
-        const imgSize = Math.min(playerImg.width, playerImg.height);
-        const sx = (playerImg.width - imgSize) / 2;
-        const sy = 50;
-        ctx.drawImage(playerImg, sx, sy, imgSize, imgSize * 0.8, x - 2, y - 2, size, size);
+        const cropW = playerImg.width * 0.55;
+        const cropH = playerImg.height * 0.45;
+        const sx = (playerImg.width - cropW) / 2;
+        const sy = playerImg.height * 0.05;
+        ctx.drawImage(playerImg, sx, sy, cropW, cropH, centerX - radius, centerY - radius, size, size);
     } else {
         ctx.fillStyle = '#FFFF00';
         ctx.fill();
@@ -228,25 +232,23 @@ function drawPlayer() {
     if (player.mouthOpen) {
         ctx.fillStyle = '#000';
         ctx.beginPath();
-        const centerX = x + TILE_SIZE/2;
-        const centerY = y + TILE_SIZE/2;
         let startAngle, endAngle;
         switch(player.direction) {
-            case 'right': startAngle = 0.25; endAngle = -0.25; break;
-            case 'left': startAngle = Math.PI + 0.25; endAngle = Math.PI - 0.25; break;
-            case 'up': startAngle = -Math.PI/2 + 0.25; endAngle = -Math.PI/2 - 0.25; break;
-            case 'down': startAngle = Math.PI/2 + 0.25; endAngle = Math.PI/2 - 0.25; break;
+            case 'right': startAngle = 0.35; endAngle = -0.35; break;
+            case 'left': startAngle = Math.PI + 0.35; endAngle = Math.PI - 0.35; break;
+            case 'up': startAngle = -Math.PI/2 + 0.35; endAngle = -Math.PI/2 - 0.35; break;
+            case 'down': startAngle = Math.PI/2 + 0.35; endAngle = Math.PI/2 - 0.35; break;
         }
         ctx.moveTo(centerX, centerY);
-        ctx.arc(centerX, centerY, size/2, endAngle, startAngle);
+        ctx.arc(centerX, centerY, radius + 2, endAngle, startAngle);
         ctx.closePath();
         ctx.fill();
     }
     
     ctx.strokeStyle = '#FFD700';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, size/2 - 2, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
     ctx.stroke();
 }
 
@@ -490,3 +492,30 @@ function setDirection(dir) { player.nextDirection = dir; }
 </body>
 </html>
 <!-- v2 -->
+eCount++;
+    if (frameCount % 8 === 0) movePlayer();
+    if (frameCount % 12 === 0) moveGhosts();
+    
+    checkCollisions();
+    drawMaze();
+    drawPlayer();
+    drawGhosts();
+    
+    requestAnimationFrame(gameLoop);
+}
+
+document.addEventListener('keydown', (e) => {
+    switch(e.key) {
+        case 'ArrowUp': player.nextDirection = 'up'; e.preventDefault(); break;
+        case 'ArrowDown': player.nextDirection = 'down'; e.preventDefault(); break;
+        case 'ArrowLeft': player.nextDirection = 'left'; e.preventDefault(); break;
+        case 'ArrowRight': player.nextDirection = 'right'; e.preventDefault(); break;
+    }
+});
+
+function setDirection(dir) { player.nextDirection = dir; }
+    </script>
+</body>
+</html>
+<!-- v2 -->
+
