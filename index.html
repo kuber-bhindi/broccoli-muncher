@@ -491,31 +491,3 @@ function setDirection(dir) { player.nextDirection = dir; }
     </script>
 </body>
 </html>
-<!-- v2 -->
-eCount++;
-    if (frameCount % 8 === 0) movePlayer();
-    if (frameCount % 12 === 0) moveGhosts();
-    
-    checkCollisions();
-    drawMaze();
-    drawPlayer();
-    drawGhosts();
-    
-    requestAnimationFrame(gameLoop);
-}
-
-document.addEventListener('keydown', (e) => {
-    switch(e.key) {
-        case 'ArrowUp': player.nextDirection = 'up'; e.preventDefault(); break;
-        case 'ArrowDown': player.nextDirection = 'down'; e.preventDefault(); break;
-        case 'ArrowLeft': player.nextDirection = 'left'; e.preventDefault(); break;
-        case 'ArrowRight': player.nextDirection = 'right'; e.preventDefault(); break;
-    }
-});
-
-function setDirection(dir) { player.nextDirection = dir; }
-    </script>
-</body>
-</html>
-<!-- v2 -->
-
