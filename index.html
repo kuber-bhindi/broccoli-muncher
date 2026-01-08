@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Broccoli Muncher - Custom Pacman</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            color: #fff;
+        }
+        #gameContainer { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        #header { display: flex; justify-content: space-between; width: 100%; max-width: 560px; padding: 10px 20px; font-size: 14px; font-weight: bold; }
+        #score { color: #FFD700; }
+        #lives { color: #FF6B6B; }
+        #gameCanvas { border: 4px solid #2121DE; border-radius: 8px; }
+        #controls { margin-top: 15px; text-align: center; font-size: 12px; color: #888; }
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border-radius: 15px;
+            border: 3px solid #2121DE;
+            text-align: center;
+            z-index: 100;
+        }
+        .overlay h2 { font-size: 24px; margin-bottom: 20px; }
+        #gameOver h2 { color: #FF0000; }
+        #victory h2 { color: #00FF00; }
+        .finalScore { color: #FFD700; font-size: 16px; margin-bottom: 25px; }
+        .btn {
+            background: #2121DE;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: #3232FF; transform: scale(1.05); }
+        #startScreen h1 { color: #FFD700; font-size: 18px; margin-bottom: 20px; }
+        #startScreen p { color: #888; font-size: 11px; margin-bottom: 20px; line-height: 1.8; }
+        #startBtn { background: #00FF00; color: #000; }
+        #startBtn:hover { background: #33FF33; }
+        .mobile-controls { display: none; margin-top: 20px; flex-direction: column; gap: 10px; }
+        .control-row { display: flex; justify-content: center; gap: 10px; }
+        .control-btn { width: 60px; height: 60px; background: #2121DE; border: none; border-radius: 10px; font-size: 24px; cursor: pointer; color: white; }
+        @media (max-width: 600px) { .mobile-controls { display: flex; } #controls { display: none; } }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="header">
+            <div id="score">SCORE: 0</div>
+            <div id="lives">LIVES: 3</div>
+        </div>
+        <canvas id="gameCanvas" width="560" height="620"></canvas>
+        <div id="controls">Use ARROW KEYS to move | Eat all 🥦 to win! | Big 🥦 = Power Mode!</div>
+        <div class="mobile-controls">
+            <div class="control-row"><button class="control-btn" onclick="setDirection('up')">⬆️</button></div>
+            <div class="control-row">
+                <button class="control-btn" onclick="setDirection('left')">⬅️</button>
+                <button class="control-btn" onclick="setDirection('down')">⬇️</button>
+                <button class="control-btn" onclick="setDirection('right')">➡️</button>
+            </div>
+        </div>
+    </div>
+    <div id="startScreen" class="overlay" style="display:block">
+        <h1>🥦 BROCCOLI MUNCHER 🥦</h1>
+        <p>Eat all the broccoli to win!<br>Avoid the ghosts!<br>Big broccoli = Power mode (eat ghosts!)</p>
+        <button id="startBtn" class="btn" onclick="startGame()">START GAME</button>
+    </div>
+    <div id="gameOver" class="overlay">
+        <h2>GAME OVER</h2>
+        <div class="finalScore">Final Score: <span id="finalScore">0</span></div>
+        <button class="btn" onclick="restartGame()">PLAY AGAIN</button>
+    </div>
+    <div id="victory" class="overlay">
+        <h2>🎉 YOU WIN! 🎉</h2>
+        <div class="finalScore">Final Score: <span id="victoryScore">0</span></div>
+        <button class="btn" onclick="restartGame()">PLAY AGAIN</button>
+    </div>
+    <script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const TILE_SIZE = 20;
+const COLS = 28;
+const ROWS = 31;
+
+const playerImg = new Image();
+playerImg.crossOrigin = 'anonymous';
+playerImg.src = 'https://kela-stag.blr1.digitaloceanspaces.com/mogra/mogra/llm/images/1767867657578-0654106c.jpg';
+
+const originalMaze = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,3,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,3,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,2,1],
+    [1,2,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,2,1,1,1,1,1,4,1,1,4,1,1,1,1,1,2,1,1,1,1,1,1],
+    [1,1,1,1,1,1,2,1,1,1,1,1,4,1,1,4,1,1,1,1,1,2,1,1,1,1,1,1],
+    [1,1,1,1,1,1,2,1,1,4,4,4,4,4,4,4,4,4,4,1,1,2,1,1,1,1,1,1],
+    [1,1,1,1,1,1,2,1,1,4,1,1,1,0,0,1,1,1,4,1,1,2,1,1,1,1,1,1],
+    [1,1,1,1,1,1,2,1,1,4,1,0,0,0,0,0,0,1,4,1,1,2,1,1,1,1,1,1],
+    [4,4,4,4,4,4,2,4,4,4,1,0,0,0,0,0,0,1,4,4,4,2,4,4,4,4,4,4],
+    [1,1,1,1,1,1,2,1,1,4,1,0,0,0,0,0,0,1,4,1,1,2,1,1,1,1,1,1],
+    [1,1,1,1,1,1,2,1,1,4,1,1,1,1,1,1,1,1,4,1,1,2,1,1,1,1,1,1],
+    [1,1,1,1,1,1,2,1,1,4,4,4,4,4,4,4,4,4,4,1,1,2,1,1,1,1,1,1],
+    [1,1,1,1,1,1,2,1,1,4,1,1,1,1,1,1,1,1,4,1,1,2,1,1,1,1,1,1],
+    [1,1,1,1,1,1,2,1,1,4,1,1,1,1,1,1,1,1,4,1,1,2,1,1,1,1,1,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+    [1,3,2,2,1,1,2,2,2,2,2,2,2,4,4,2,2,2,2,2,2,2,1,1,2,2,3,1],
+    [1,1,1,2,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,2,1,1,1],
+    [1,1,1,2,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,2,1,1,1],
+    [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+    [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+];
+
+let maze = [];
+let score = 0;
+let lives = 3;
+let gameRunning = false;
+let powerMode = false;
+let powerTimer = null;
+let totalBroccoli = 0;
+let eatenBroccoli = 0;
+
+let player = { x: 14, y: 23, direction: 'right', nextDirection: 'right', mouthOpen: true, mouthTimer: 0 };
+
+const ghostColors = ['#FF0000', '#00FFFF', '#FFB8FF', '#FFB852'];
+let ghosts = [];
+
+function initGhosts() {
+    ghosts = [
+        { x: 12, y: 14, color: '#FF0000', direction: 'left', scared: false, inHouse: true },
+        { x: 13, y: 14, color: '#00FFFF', direction: 'up', scared: false, inHouse: true },
+        { x: 14, y: 14, color: '#FFB8FF', direction: 'down', scared: false, inHouse: true },
+        { x: 15, y: 14, color: '#FFB852', direction: 'right', scared: false, inHouse: true }
+    ];
+}
+
+function resetMaze() {
+    maze = originalMaze.map(row => [...row]);
+    totalBroccoli = 0;
+    eatenBroccoli = 0;
+    for (let row of maze) {
+        for (let cell of row) {
+            if (cell === 2 || cell === 3) totalBroccoli++;
+        }
+    }
+}
+
+function resetPlayer() {
+    player.x = 14; player.y = 23;
+    player.direction = 'right'; player.nextDirection = 'right';
+}
+
+function drawMaze() {
+    for (let row = 0; row < ROWS; row++) {
+        for (let col = 0; col < COLS; col++) {
+            const tile = maze[row][col];
+            const x = col * TILE_SIZE;
+            const y = row * TILE_SIZE;
+            
+            if (tile === 1) {
+                ctx.fillStyle = '#2121DE';
+                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = '#1a1aa8';
+                ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+            } else if (tile === 2) {
+                ctx.font = '14px Arial';
+                ctx.fillText('🥦', x + 2, y + 16);
+            } else if (tile === 3) {
+                ctx.font = '18px Arial';
+                ctx.fillText('🥦', x, y + 18);
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(x + 10, y + 10, 12, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+}
+
+function drawPlayer() {
+    const x = player.x * TILE_SIZE;
+    const y = player.y * TILE_SIZE;
+    const size = TILE_SIZE + 4;
+    
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, size/2 - 2, 0, Math.PI * 2);
+    ctx.clip();
+    
+    if (playerImg.complete && playerImg.naturalWidth > 0) {
+        const imgSize = Math.min(playerImg.width, playerImg.height);
+        const sx = (playerImg.width - imgSize) / 2;
+        const sy = 50;
+        ctx.drawImage(playerImg, sx, sy, imgSize, imgSize * 0.8, x - 2, y - 2, size, size);
+    } else {
+        ctx.fillStyle = '#FFFF00';
+        ctx.fill();
+    }
+    ctx.restore();
+    
+    if (player.mouthOpen) {
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        const centerX = x + TILE_SIZE/2;
+        const centerY = y + TILE_SIZE/2;
+        let startAngle, endAngle;
+        switch(player.direction) {
+            case 'right': startAngle = 0.25; endAngle = -0.25; break;
+            case 'left': startAngle = Math.PI + 0.25; endAngle = Math.PI - 0.25; break;
+            case 'up': startAngle = -Math.PI/2 + 0.25; endAngle = -Math.PI/2 - 0.25; break;
+            case 'down': startAngle = Math.PI/2 + 0.25; endAngle = Math.PI/2 - 0.25; break;
+        }
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, size/2, endAngle, startAngle);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, size/2 - 2, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+function drawGhosts() {
+    for (let ghost of ghosts) {
+        const x = ghost.x * TILE_SIZE;
+        const y = ghost.y * TILE_SIZE;
+        
+        ctx.fillStyle = ghost.scared ? '#0000FF' : ghost.color;
+        ctx.beginPath();
+        ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2 - 2, TILE_SIZE/2, Math.PI, 0);
+        ctx.lineTo(x + TILE_SIZE, y + TILE_SIZE);
+        const waves = 3;
+        for (let i = waves; i >= 0; i--) {
+            const wx = x + (TILE_SIZE / waves) * i;
+            const wy = y + TILE_SIZE - (i % 2 === 0 ? 0 : 4);
+            ctx.lineTo(wx, wy);
+        }
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = '#FFF';
+        ctx.beginPath();
+        ctx.ellipse(x + 6, y + 8, 4, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(x + 14, y + 8, 4, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        if (!ghost.scared) {
+            ctx.fillStyle = '#00F';
+            ctx.beginPath();
+            ctx.arc(x + 7, y + 9, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x + 15, y + 9, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+}
+
+function canMove(x, y) {
+    if (x < 0 || x >= COLS) return true;
+    if (y < 0 || y >= ROWS) return false;
+    return maze[y][x] !== 1;
+}
+
+function movePlayer() {
+    let nextX = player.x, nextY = player.y;
+    switch(player.nextDirection) {
+        case 'up': nextY--; break;
+        case 'down': nextY++; break;
+        case 'left': nextX--; break;
+        case 'right': nextX++; break;
+    }
+    if (canMove(nextX, nextY)) player.direction = player.nextDirection;
+    
+    nextX = player.x; nextY = player.y;
+    switch(player.direction) {
+        case 'up': nextY--; break;
+        case 'down': nextY++; break;
+        case 'left': nextX--; break;
+        case 'right': nextX++; break;
+    }
+    
+    if (canMove(nextX, nextY)) {
+        player.x = nextX;
+        player.y = nextY;
+        if (player.x < 0) player.x = COLS - 1;
+        if (player.x >= COLS) player.x = 0;
+    }
+    
+    if (maze[player.y] && (maze[player.y][player.x] === 2 || maze[player.y][player.x] === 3)) {
+        if (maze[player.y][player.x] === 3) {
+            activatePowerMode();
+            score += 50;
+        } else {
+            score += 10;
+        }
+        maze[player.y][player.x] = 4;
+        eatenBroccoli++;
+        updateScore();
+        if (eatenBroccoli >= totalBroccoli) victory();
+    }
+    
+    player.mouthTimer++;
+    if (player.mouthTimer > 5) {
+        player.mouthOpen = !player.mouthOpen;
+        player.mouthTimer = 0;
+    }
+}
+
+function activatePowerMode() {
+    powerMode = true;
+    for (let ghost of ghosts) ghost.scared = true;
+    if (powerTimer) clearTimeout(powerTimer);
+    powerTimer = setTimeout(() => {
+        powerMode = false;
+        for (let ghost of ghosts) ghost.scared = false;
+    }, 7000);
+}
+
+function moveGhosts() {
+    for (let ghost of ghosts) {
+        if (ghost.inHouse) {
+            ghost.y--;
+            if (ghost.y <= 11) ghost.inHouse = false;
+            continue;
+        }
+        
+        const directions = ['up', 'down', 'left', 'right'];
+        const opposite = { up: 'down', down: 'up', left: 'right', right: 'left' };
+        
+        let validDirs = directions.filter(dir => {
+            if (dir === opposite[ghost.direction]) return false;
+            let nx = ghost.x, ny = ghost.y;
+            switch(dir) {
+                case 'up': ny--; break;
+                case 'down': ny++; break;
+                case 'left': nx--; break;
+                case 'right': nx++; break;
+            }
+            if (ny >= 12 && ny <= 16 && nx >= 11 && nx <= 16) return false;
+            return canMove(nx, ny);
+        });
+        
+        if (validDirs.length === 0) validDirs = [opposite[ghost.direction]];
+        
+        if (!ghost.scared && Math.random() < 0.7) {
+            let bestDir = validDirs[0], bestDist = Infinity;
+            for (let dir of validDirs) {
+                let nx = ghost.x, ny = ghost.y;
+                switch(dir) { case 'up': ny--; break; case 'down': ny++; break; case 'left': nx--; break; case 'right': nx++; break; }
+                const dist = Math.abs(nx - player.x) + Math.abs(ny - player.y);
+                if (dist < bestDist) { bestDist = dist; bestDir = dir; }
+            }
+            ghost.direction = bestDir;
+        } else if (ghost.scared && Math.random() < 0.7) {
+            let bestDir = validDirs[0], bestDist = 0;
+            for (let dir of validDirs) {
+                let nx = ghost.x, ny = ghost.y;
+                switch(dir) { case 'up': ny--; break; case 'down': ny++; break; case 'left': nx--; break; case 'right': nx++; break; }
+                const dist = Math.abs(nx - player.x) + Math.abs(ny - player.y);
+                if (dist > bestDist) { bestDist = dist; bestDir = dir; }
+            }
+            ghost.direction = bestDir;
+        } else {
+            ghost.direction = validDirs[Math.floor(Math.random() * validDirs.length)];
+        }
+        
+        switch(ghost.direction) { case 'up': ghost.y--; break; case 'down': ghost.y++; break; case 'left': ghost.x--; break; case 'right': ghost.x++; break; }
+        if (ghost.x < 0) ghost.x = COLS - 1;
+        if (ghost.x >= COLS) ghost.x = 0;
+    }
+}
+
+function checkCollisions() {
+    for (let ghost of ghosts) {
+        if (ghost.x === player.x && ghost.y === player.y) {
+            if (ghost.scared) {
+                score += 200;
+                updateScore();
+                ghost.x = 13; ghost.y = 14;
+                ghost.inHouse = true;
+                ghost.scared = false;
+            } else {
+                lives--;
+                updateLives();
+                if (lives <= 0) gameOver();
+                else { resetPlayer(); initGhosts(); }
+            }
+        }
+    }
+}
+
+function updateScore() { document.getElementById('score').textContent = 'SCORE: ' + score; }
+function updateLives() { document.getElementById('lives').textContent = 'LIVES: ' + lives; }
+
+function gameOver() {
+    gameRunning = false;
+    document.getElementById('finalScore').textContent = score;
+    document.getElementById('gameOver').style.display = 'block';
+}
+
+function victory() {
+    gameRunning = false;
+    document.getElementById('victoryScore').textContent = score;
+    document.getElementById('victory').style.display = 'block';
+}
+
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    resetMaze(); resetPlayer(); initGhosts();
+    score = 0; lives = 3; eatenBroccoli = 0; powerMode = false;
+    updateScore(); updateLives();
+    gameRunning = true;
+    gameLoop();
+}
+
+function restartGame() {
+    document.getElementById('gameOver').style.display = 'none';
+    document.getElementById('victory').style.display = 'none';
+    resetMaze(); resetPlayer(); initGhosts();
+    score = 0; lives = 3; eatenBroccoli = 0; powerMode = false;
+    if (powerTimer) clearTimeout(powerTimer);
+    updateScore(); updateLives();
+    gameRunning = true;
+    gameLoop();
+}
+
+let frameCount = 0;
+function gameLoop() {
+    if (!gameRunning) return;
+    
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    frameCount++;
+    if (frameCount % 8 === 0) movePlayer();
+    if (frameCount % 12 === 0) moveGhosts();
+    
+    checkCollisions();
+    drawMaze();
+    drawPlayer();
+    drawGhosts();
+    
+    requestAnimationFrame(gameLoop);
+}
+
+document.addEventListener('keydown', (e) => {
+    switch(e.key) {
+        case 'ArrowUp': player.nextDirection = 'up'; e.preventDefault(); break;
+        case 'ArrowDown': player.nextDirection = 'down'; e.preventDefault(); break;
+        case 'ArrowLeft': player.nextDirection = 'left'; e.preventDefault(); break;
+        case 'ArrowRight': player.nextDirection = 'right'; e.preventDefault(); break;
+    }
+});
+
+function setDirection(dir) { player.nextDirection = dir; }
+    </script>
+</body>
+</html>
